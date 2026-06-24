@@ -1,106 +1,99 @@
-# Example Forge Mod for Minecraft 1.7.10
+# CanalAndWell
 
-[![](https://jitpack.io/v/GTNewHorizons/ExampleMod1.7.10.svg)](https://jitpack.io/#GTNewHorizons/ExampleMod1.7.10)
-[![](https://github.com/GTNewHorizons/ExampleMod1.7.10/actions/workflows/build-and-test.yml/badge.svg)](https://github.com/GTNewHorizons/ExampleMod1.7.10/actions/workflows/build-and-test.yml)
+[![](https://jitpack.io/v/iamsoNewBee/Canal-and-Well.svg)](https://jitpack.io/#iamsoNewBee/Canal-and-Well)
 
-An example mod for Minecraft 1.7.10 with Forge focussed on a stable, updatable setup.
+A water canal system mod for Minecraft 1.7.10. Build irrigation networks with automatic water propagation, dynamic block connections, and three material variants.
 
-<!-- omit in toc -->
-### Table of Contents
+## Features
 
-* [Example Forge Mod for Minecraft 1.7.10](#example-forge-mod-for-minecraft-1710)
-    * [Motivation](#motivation)
-    * [Help! I'm stuck!](#help-im-stuck)
-    * [Getting started](#getting-started)
-    * [Features](#features)
-    * [Files](#files)
-    * [Forge's Access Transformers](#forges-access-transformers)
-    * [Mixins](#mixins)
-    * [Advanced](#advanced)
-    * [Feedback wanted](#feedback-wanted)
+- **Directional state machine** — A single `BlockCanal` + `TileEntityCanal` replaces the 18+ block types used in the original Canal mod. Connection shapes auto-update when neighboring canals are placed or destroyed.
+- **Three material variants** — Stone, Dirt, and Sand canals, each with unique textures, sounds, and harvest tools. All share the same connection logic.
+- **Auto-connecting shapes** — Straight, T-junction (4 orientations), and Cross (4-way). Shapes transition automatically based on adjacent canal placement.
+- **Closed canal** — Sneak + right-click to lock a canal into a straight pipe. Closed canals don't participate in auto-connection on their off-axis sides.
+- **Water propagation** — Wet canals spread water to adjacent dry canals and spawn flowing water blocks in adjacent air spaces.
+- **Glass bottle filling** — Right-click a wet canal with a glass bottle to fill it into a water bottle (configurable).
+- **Configurable** — Tick rate, water flow range, bottle filling, debug logging — all adjustable via Forge config.
 
+## Canal Shapes
 
-### Motivation
+| Shape | Connections | Description |
+|-------|-------------|-------------|
+| **Straight NS** | North + South | Default placement along NS axis |
+| **Straight EW** | East + West | Default placement along EW axis |
+| **T-NW** | North + South + West | T-junction, NS trunk with W branch |
+| **T-NE** | North + South + East | T-junction, NS trunk with E branch |
+| **T-EN** | East + West + North | T-junction, EW trunk with N branch |
+| **T-ES** | East + West + South | T-junction, EW trunk with S branch |
+| **Cross** | All 4 directions | Four-way intersection |
+| **Closed** | Axis-locked | Straight pipe, off-axis connections blocked |
 
-We had our fair share in struggles with build scripts for Minecraft Forge. There are quite a few pitfalls from non-obvious error messages. This Example Project provides you a build system you can adapt to over 90% of Minecraft Forge mods and can easily be updated if need be.
+## Variants
 
-### Help! I'm stuck!
+| Variant | Material | Hardness | Tool | Sound |
+|---------|----------|----------|------|-------|
+| **Stone** | Rock | 1.5 | Pickaxe | Stone |
+| **Dirt** | Ground | 1.0 | Shovel | Gravel |
+| **Sand** | Sand | 0.8 | Shovel | Sand |
 
-We all have been there! Check out our [FAQ](https://github.com/GTNewHorizons/ExampleMod1.7.10/blob/main/docs/FAQ.md). If that doesn't help, please open an issue.
+## Usage
 
-### Getting started
+1. **Place** a canal block — it aligns to your facing direction (NS or EW).
+2. **Connect** by placing another canal adjacent — shapes auto-update into T-junctions or Crosses.
+3. **Bring water** adjacent to a canal — it detects the source and becomes wet.
+4. **Sneak + Right-click** to toggle closed mode (locks shape, blocks off-axis connections).
+5. **Right-click with glass bottle** on a wet canal to fill water bottles.
 
-Creating mod from scratch:
-1. Unzip [project starter](https://github.com/GTNewHorizons/ExampleMod1.7.10/releases/download/master-packages/starter.zip) into project directory.
-2. Replace placeholders in LICENSE-template and rename it to LICENSE, or remove LICENSE-template and put any other license you like on your code. This is an permissive OSS project and we encourage you participate in OSS movement by having permissive license like one in template. You can find out pros and cons of OSS software in [this article](https://www.freecodecamp.org/news/what-is-great-about-developing-open-source-and-what-is-not/)
-3. Ensure your project is under VCS. For example initialise git repository by running `git init; git commit --message "initialized repository"`.
-4. Replace placeholders (edit values in gradle.properties, change example package and class names, etc.)
-5. Run `./gradlew setupDecompWorkspace`
-6. Run `./gradlew build`
-6. Make sure to check out the rest sections of this file.
-7. You are good to go!
+## Configuration
 
-We also have described guidelines for existing mod [migration](docs/migration.md) and [porting](docs/porting.md)
+All settings are in `config/CanalAndWell.cfg`:
 
-### Features
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `tickRate` | 10 | Ticks between water propagation checks |
+| `waterFlowRange` | 64 | Max distance water can flow through canals |
+| `cleanupFlowingWater` | true | Remove adjacent flowing water when canal breaks |
+| `enableBottleFill` | true | Allow glass bottle filling from wet canals |
+| `debugLogging` | false | Enable detailed console logging |
 
- - Updatable: Replace [`build.gradle`](https://github.com/GTNewHorizons/ExampleMod1.7.10/blob/main/build.gradle) with a newer version
- - Optional API artifact (.jar)
- - Optional version replacement in Java files
- - Optional shadowing of dependencies
- - Simplified setup of Mixin and example
- - Scala support (add sources under `src/main/scala/` instead of `src/main/java/`)
- - Optional named developer account for consistent player progression during testing
- - Boilerplate forge mod as starting point
- - Improved warnings for pitfalls
- - Git Tags integration for versioning
- - [Jitpack](https://jitpack.io) CI
- - GitHub CI:
-   - Releasing your artifacts on new tags pushed. Push git tag named after version (e.g. 1.0.0) which will trigger a release of artifacts with according names.
-   - Running smoke test for server startup. On any server crash occurring workflow will fail and print the crash log.
+## Building
 
-### Files
- - [`build.gradle`](https://github.com/GTNewHorizons/ExampleMod1.7.10/blob/main/build.gradle): This is the core script of the build process. You should not need to tamper with it, unless you are trying to accomplish something out of the ordinary. __Do not touch this file! You will make a future update near impossible if you do so!__
- - [`gradle.properties`](https://github.com/GTNewHorizons/ExampleMod1.7.10/blob/main/gradle.properties): The core configuration file. It includes
- - [`dependencies.gradle[.kts]`](https://github.com/GTNewHorizons/ExampleMod1.7.10/blob/main/dependencies.gradle): Add your mod's dependencies in this file. This is separate from the main build script, so you may replace the [`build.gradle`](https://github.com/SinTh0r4s/ExampleMod1.7.10/blob/main/build.gradle) if an update is available.
- - [`repositories.gradle[.kts]`](https://github.com/GTNewHorizons/ExampleMod1.7.10/blob/main/repositories.gradle): Add your dependencies' repositories. This is separate from the main build script, so you may replace the [`build.gradle`](https://github.com/SinTh0r4s/ExampleMod1.7.10/blob/main/build.gradle) if an update is available.
- - `addon.gradle[.kts]`: Any additional build logic. This is separate from the main build script, so you may replace the [`build.gradle`](https://github.com/SinTh0r4s/ExampleMod1.7.10/blob/main/build.gradle) if an update is available. See [Advanced](#advanced) for more details.
- - [`jitpack.yml`](https://github.com/GTNewHorizons/ExampleMod1.7.10/blob/main/jitpack.yml): Ensures that your mod is available as import over [Jitpack](https://jitpack.io).
- - [`.github/workflows/gradle.yml`](https://github.com/GTNewHorizons/ExampleMod1.7.10/blob/main/.github/workflows/gradle.yml): A simple CI script that will build your mod any time it is pushed to `master` or `main` and publish the result as release in your repository. This feature is free with GitHub if your repository is public.
+Requires **ForgeGradle** for Minecraft 1.7.10 (GTNH buildscript).
 
-### Forge's Access Transformers
+```bash
+# Setup workspace
+./gradlew setupDecompWorkspace
 
-You may activate Forge's Access Transformers by defining a configuration file in `gradle.properties`.
+# Build the mod
+./gradlew build
 
-Check out the [`example-access-transformers`](https://github.com/GTNewHorizons/ExampleMod1.7.10/tree/example-access-transformers) branch for a working example!
+# Output: build/libs/CanalAndWell-<version>.jar
+```
 
-> [!WARNING]
-> Access Transformers are bugged and will deny you any sources for the decompiled Minecraft! Your development environment will still work, but you might face some inconveniences. For example, IntelliJ will not permit searches in dependencies without attached sources.
+## Project Structure
 
-### Mixins
+```
+src/main/java/com/catfish/canalandwell/
+├── CanalAndWell.java          # Main mod class
+├── ClientProxy.java           # Client-side proxy
+├── CommonProxy.java           # Server-side proxy
+├── Config.java                # Configuration handler
+├── block/
+│   └── BlockCanal.java        # Canal block — state machine + 3 variants
+└── tileentity/
+    └── TileEntityCanal.java   # Water detection + propagation
 
-[Mixins](https://github.com/SpongePowered/Mixin) are used to modify vanilla or mod/library code during runtime without having to edit, recompile, and redistribute the original code. For example, mixins can change a hardcoded value, redirect a method call, inject additional code, access private fields/methods, make a class implement your interface, and more. Mixins are an advanced feature which most normal mods will not require.
+src/main/resources/assets/canalandwell/
+├── lang/
+│   ├── en_US.lang             # English localization
+│   └── zh_CN.lang             # Chinese localization
+└── textures/blocks/           # 51 variant textures + shared assets
+```
 
-Documentation about Mixin features can be found here: [Mixin Wiki](https://github.com/SpongePowered/Mixin/wiki) and [MixinExtras Wiki](https://github.com/LlamaLad7/MixinExtras/wiki)
+## Credits
 
-There are many examples of mixins in these mods: [Hodgepodge](https://github.com/GTNewHorizons/Hodgepodge) and [Angelica](https://github.com/GTNewHorizons/Angelica)
+- Original Canal mod scripting reference (`data_dump.txt`)
+- Built on the [GTNH ExampleMod](https://github.com/GTNewHorizons/ExampleMod1.7.10) build system
 
-To enable Mixins in your project, follow one of the example commits:
-- use [normal mixins](https://github.com/GTNewHorizons/ExampleMod1.7.10/commit/beba55615fa8337b7639f0d5b18db6cc8d4826be) for basic and quick registration
-- use [GTNH IMixins](https://github.com/GTNewHorizons/ExampleMod1.7.10/commit/055cd4f18765a421a86c706f53b62116988297e3) (recommended) for the same thing as below, but in a less verbose and more unified manner using the IMixins api
-- use [GTNH Early/Late mixins](https://github.com/GTNewHorizons/ExampleMod1.7.10/commit/c4df59d92164775b69451f3e690239e93d1fc979) to have full control over the registration logic and check for presence of other mods during runtime to load your mixins
+## License
 
-The extra required dependencies are handled automatically after mixins are enabled.
-
-### Advanced
-
-If your project requires custom gradle commands you may add a `addon.gradle[.kts]` to your project. It will be added automatically to the build script. Although we recommend against it, it is sometimes required. When in doubt, feel free to ask us about it. You may break future updates of this build system!
-If you need access to properties modified later in the buildscript, you can also use a `addon.late.gradle[.kts]`.
-For local tweaks that you don't want to commit to Git, like adding extra JVM arguments for testing, use `addon[.late].local.gradle[.kts]`.
-
-### Feedback wanted
-
-If you tried out this build script we would love to head your opinion! Is there any feature missing for you? Did something not work? Please open an issue and we will try to resolve it asap!
-
-Happy modding,\
-[SinTh0r4s](https://github.com/SinTh0r4s), [TheElan](https://github.com/TheElan) and [basdxz](https://github.com/basdxz)
+This project is licensed under the MIT License — see the LICENSE file for details.
