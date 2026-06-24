@@ -1,7 +1,5 @@
 package com.catfish.canalandwell.tileentity;
 
-import java.util.List;
-
 import net.minecraft.block.Block;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.init.Blocks;
@@ -72,7 +70,8 @@ public class TileEntityCanal extends TileEntity {
         S35PacketUpdateTileEntity packet = new S35PacketUpdateTileEntity(
                 xCoord, yCoord, zCoord, 0, getUpdateTag());
         double range = 64 * 64;
-        for (EntityPlayerMP player : (List<EntityPlayerMP>) ws.playerEntities) {
+        for (Object obj : ws.playerEntities) {
+            EntityPlayerMP player = (EntityPlayerMP) obj;
             if (player.getDistanceSq(xCoord + 0.5, yCoord + 0.5, zCoord + 0.5) <= range) {
                 player.playerNetServerHandler.sendPacket(packet);
             }
