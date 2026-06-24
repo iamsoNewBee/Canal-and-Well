@@ -27,8 +27,8 @@ public class Config {
     // ───────────────── 流水方块设置 ─────────────────
     /** 水渠湿润时产出的流体方块名称，默认 minecraft:water */
     public static String flowingFluidBlockName = "minecraft:water";
-    /** 产出的流体方块 metadata，默认 1（流动水） */
-    public static int flowingFluidMeta = 1;
+    /** 产出的流体方块 metadata，默认 0（完整水源方块） */
+    public static int flowingFluidMeta = 0;
 
     // ───────────────── 通用设置 ─────────────────
     /** 是否在日志中输出水渠状态更新信息 */
@@ -57,7 +57,7 @@ public class Config {
             flowingFluidBlockName = cfg.getString("flowingFluidBlockName", catWater, flowingFluidBlockName,
                 "Block ID (e.g. 'minecraft:water') spawned when a wet canal outputs fluid to adjacent spaces. (default: minecraft:water)");
             flowingFluidMeta = cfg.getInt("flowingFluidMeta", catWater, flowingFluidMeta, 0, 15,
-                "Metadata for the spawned fluid block. 0 = source, 1 = flowing. (default: 1)");
+                "Metadata for the spawned fluid block. 0 = source (full block), 1 = flowing. (default: 0)");
 
             // ── 延迟设置 ──
             chainDryDelay = cfg.getInt("chainDryDelay", catWater, chainDryDelay, 0, 200,

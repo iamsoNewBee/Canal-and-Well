@@ -323,7 +323,8 @@ public class TileEntityCanal extends TileEntity {
 
     /**
      * 水渠变干时，清除其连接方向已放置的流水方块。
-     * 仅清除流动态（meta == flowingFluidMeta）流体，保留水源方块。
+     * 与 spawnFlowingWater 的条件对称：方向上有流态/水源水方块，
+     * 且下方非空气时清除。
      */
     private void cleanupFlowingWater() {
         if (!Config.cleanupFlowingWater) return;
@@ -331,7 +332,6 @@ public class TileEntityCanal extends TileEntity {
         int meta = worldObj.getBlockMetadata(xCoord, yCoord, zCoord);
         ForgeDirection[] dirs = BlockCanal.getConnectionDirections(meta);
         Block fluidBlock = getFluidBlock();
-        int fluidMeta = Config.flowingFluidMeta;
 
         for (ForgeDirection dir : dirs) {
             int nx = xCoord + dir.offsetX;
@@ -339,11 +339,10 @@ public class TileEntityCanal extends TileEntity {
             int nz = zCoord + dir.offsetZ;
 
             Block neighbor = worldObj.getBlock(nx, ny, nz);
-            if ((neighbor == fluidBlock || neighbor == Blocks.water)
-                    && worldObj.getBlockMetadata(nx, ny, nz) == fluidMeta) {
-                // 仅当该水流下方是水渠或流体时清除（确保是水渠产出的流水）
-                Block below = worldObj.getBlock(nx, ny - 1, nz);
-                if (below instanceof BlockCanal || below == fluidBlock || below == Blocks.water) {
+            // 清除流态水或水源水，不论 meta
+            if (neighbor == fluidBlock || neighbor == Blocks.water) {
+                // 仅在支撑面上清除（与生成条件对称，避免误删自然水体）
+                if (!worldObj.isAirBlock(nx, ny - 1, nz)) {
                     worldObj.setBlockToAir(nx, ny, nz);
                 }
             }
