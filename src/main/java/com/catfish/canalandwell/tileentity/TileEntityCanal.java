@@ -72,10 +72,19 @@ public class TileEntityCanal extends TileEntity {
     }
 
     // ══════════════════════════════════════════════════════
-    //  水源检测 —— 检查四个水平方向
+    //  水源检测 —— 检查四个水平方向 + 可配置流体
     // ══════════════════════════════════════════════════════
 
+    /**
+     * 检测相邻是否有水源或已湿润水渠。
+     * 检测目标：
+     *   1. 可配置流体方块 (meta=0, 水源)
+     *   2. 已湿润的相邻水渠
+     *   3. 原版水源方块 (minecraft:water meta=0)，作为兜底
+     */
     public boolean detectWaterSource() {
+        Block configuredFluid = getFluidBlock();
+
         for (ForgeDirection dir : ForgeDirection.VALID_DIRECTIONS) {
             if (dir == ForgeDirection.UP || dir == ForgeDirection.DOWN) continue;
 
@@ -84,9 +93,15 @@ public class TileEntityCanal extends TileEntity {
             int nz = zCoord + dir.offsetZ;
 
             Block neighbor = worldObj.getBlock(nx, ny, nz);
+            int neighborMeta = worldObj.getBlockMetadata(nx, ny, nz);
 
-            // 水源方块 (meta=0)
-            if (neighbor == Blocks.water && worldObj.getBlockMetadata(nx, ny, nz) == 0) {
+            // 可配置流体方块的水源 (meta=0)
+            if (neighbor == configuredFluid && neighborMeta == 0) {
+                return true;
+            }
+
+            // 原版水源方块 (始终作为兜底检测)
+            if (configuredFluid != Blocks.water && neighbor == Blocks.water && neighborMeta == 0) {
                 return true;
             }
 
@@ -105,6 +120,11 @@ public class TileEntityCanal extends TileEntity {
     //  传播
     // ══════════════════════════════════════════════════════
 
+    /**
+     * 将湿润状态传播到相邻干燥水渠。
+     * 被 propagateImmediate() 和 updateEntity() 共用。
+     * 传播不跨变体 —— 石质/土质/沙质水渠均可互相传播。
+     */
     private void propagateWetness() {
         for (ForgeDirection dir : new ForgeDirection[] {
                 ForgeDirection.NORTH, ForgeDirection.SOUTH,
@@ -127,7 +147,32 @@ public class TileEntityCanal extends TileEntity {
         }
     }
 
+    /**
+     * 实时传播 —— 检测到水源时立即向相邻水渠扩散湿润状态，
+     * 避免等待下一次 updateTick。用于处理"对已有水流的水渠系统
+     * 实时增添方块"的场景。
+     *
+     * 传播范围限制为单跳 (1-hop)，后续传播由各 TileEntity 的
+     * updateEntity() 逐 tick 接力完成。
+     */
+    public void propagateImmediate() {
+        if (!isWet) return;
+        propagateWetness();
+        spawnFlowingWater();
+    }
+
+    /**
+     * 在湿润水渠相邻的空气方块中生成流水。
+     * 使用可配置的流体方块与 metadata。
+     *
+     * 生成条件：
+     *   1. 水平相邻方块为空气
+     *   2. 该空气方块下方为水渠或流体
+     */
     private void spawnFlowingWater() {
+        Block fluidBlock = getFluidBlock();
+        int fluidMeta = Config.flowingFluidMeta;
+
         for (ForgeDirection dir : new ForgeDirection[] {
                 ForgeDirection.NORTH, ForgeDirection.SOUTH,
                 ForgeDirection.WEST,  ForgeDirection.EAST}) {
@@ -139,10 +184,28 @@ public class TileEntityCanal extends TileEntity {
             if (!worldObj.isAirBlock(nx, ny, nz)) continue;
 
             Block below = worldObj.getBlock(nx, ny - 1, nz);
-            if (below instanceof BlockCanal || below == Blocks.water) {
-                worldObj.setBlock(nx, ny, nz, Blocks.water, 1, 3);
+            if (below instanceof BlockCanal || below == fluidBlock || below == Blocks.water) {
+                worldObj.setBlock(nx, ny, nz, fluidBlock, fluidMeta, 3);
             }
         }
+    }
+
+    // ══════════════════════════════════════════════════════
+    //  流体方块解析
+    // ══════════════════════════════════════════════════════
+
+    /**
+     * 解析 Config.flowingFluidBlockName 为 Block 实例。
+     * 若配置的名称无效或方块不存在，回退到原版水方块。
+     */
+    private static Block getFluidBlock() {
+        Block configured = Block.getBlockFromName(Config.flowingFluidBlockName);
+        if (configured != null) {
+            return configured;
+        }
+        CanalAndWell.LOG.warn("[Canal] Unknown fluid block '{}', falling back to minecraft:water",
+                Config.flowingFluidBlockName);
+        return Blocks.water;
     }
 
     // ══════════════════════════════════════════════════════

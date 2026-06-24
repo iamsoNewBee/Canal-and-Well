@@ -20,6 +20,12 @@ public class Config {
     /** 是否允许玻璃瓶取水，默认 true */
     public static boolean enableBottleFill = true;
 
+    // ───────────────── 流水方块设置 ─────────────────
+    /** 水渠湿润时产出的流体方块名称，默认 minecraft:water */
+    public static String flowingFluidBlockName = "minecraft:water";
+    /** 产出的流体方块 metadata，默认 1（流动水） */
+    public static int flowingFluidMeta = 1;
+
     // ───────────────── 通用设置 ─────────────────
     /** 是否在日志中输出水渠状态更新信息 */
     public static boolean debugLogging = false;
@@ -42,6 +48,12 @@ public class Config {
                 "Maximum distance (in blocks) water can spread from source through canals. (default: 64)");
             cleanupFlowingWater = cfg.getBoolean("cleanupFlowingWater", catWater, cleanupFlowingWater,
                 "If true, breaking a wet canal removes adjacent flowing water blocks. (default: true)");
+
+            // ── 流水产出设置 ──
+            flowingFluidBlockName = cfg.getString("flowingFluidBlockName", catWater, flowingFluidBlockName,
+                "Block ID (e.g. 'minecraft:water') spawned when a wet canal outputs fluid to adjacent spaces. (default: minecraft:water)");
+            flowingFluidMeta = cfg.getInt("flowingFluidMeta", catWater, flowingFluidMeta, 0, 15,
+                "Metadata for the spawned fluid block. 0 = source, 1 = flowing. (default: 1)");
 
             // ── 交互类别 ──
             String catInteract = "interaction";

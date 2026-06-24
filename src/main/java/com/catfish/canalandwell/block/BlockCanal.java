@@ -277,11 +277,12 @@ public class BlockCanal extends BlockContainer {
     @Override
     public void onNeighborBlockChange(World world, int x, int y, int z, Block neighborBlock) {
         if (world.isRemote) return;
+        Block fluid = getFluidBlock();
         if (neighborBlock instanceof BlockCanal || neighborBlock == Blocks.water
-                || neighborBlock == Blocks.air) {
+                || neighborBlock == fluid || neighborBlock == Blocks.air) {
             notifyAndUpdate(world, x, y, z);
         }
-        if (neighborBlock == Blocks.water) {
+        if (neighborBlock == Blocks.water || neighborBlock == fluid) {
             checkAndWet(world, x, y, z);
         }
     }
@@ -459,12 +460,31 @@ public class BlockCanal extends BlockContainer {
     //  水源检测
     // ══════════════════════════════════════════════════════
 
+    /**
+     * 解析 Config.flowingFluidBlockName 为 Block 实例。
+     * 若配置的名称无效，回退到原版水方块。
+     */
+    private static Block getFluidBlock() {
+        Block configured = Block.getBlockFromName(Config.flowingFluidBlockName);
+        if (configured != null) {
+            return configured;
+        }
+        return Blocks.water;
+    }
+
+    /**
+     * 检测水源并实时传播。
+     * 当新方块加入已有水流的水渠系统时，立即触发湿润传播，
+     * 无需等待 updateTick，保证"实时增添"的响应性。
+     */
     private void checkAndWet(World world, int x, int y, int z) {
         TileEntity te = world.getTileEntity(x, y, z);
         if (te instanceof TileEntityCanal) {
             TileEntityCanal ct = (TileEntityCanal) te;
             if (!ct.isWet() && ct.detectWaterSource()) {
                 ct.setWet(true);
+                // 实时传播：立即将湿润状态传给相邻水渠并生成流水
+                ct.propagateImmediate();
             }
         }
     }
@@ -544,10 +564,12 @@ public class BlockCanal extends BlockContainer {
         TileEntity te = world.getTileEntity(x, y, z);
         if (te instanceof TileEntityCanal && ((TileEntityCanal) te).isWet()) {
             if (Config.cleanupFlowingWater) {
+                Block fluid = getFluidBlock();
                 for (ForgeDirection dir : HORIZONTALS) {
                     int nx = x + dir.offsetX, ny = y + dir.offsetY, nz = z + dir.offsetZ;
-                    if (world.getBlock(nx, ny, nz) == Blocks.water
-                            && world.getBlockMetadata(nx, ny, nz) == 1)
+                    Block nb = world.getBlock(nx, ny, nz);
+                    if ((nb == Blocks.water || nb == fluid)
+                            && world.getBlockMetadata(nx, ny, nz) == Config.flowingFluidMeta)
                         world.setBlockToAir(nx, ny, nz);
                 }
             }
