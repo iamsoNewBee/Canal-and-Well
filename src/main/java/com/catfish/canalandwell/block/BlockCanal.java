@@ -26,7 +26,7 @@ import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
 
 /**
- * 水渠方块 —— 定向状态机 + 旋转编码 + 封闭标志。
+ * 水渠方块 —— 定向状态机 + 旋转编码 + 封闭标志 + 材质变体。
  *
  * ============ Metadata 编码 (4 bit) ============
  * bit 0:    朝向  0=NS轴, 1=EW轴
@@ -47,6 +47,12 @@ import cpw.mods.fml.relauncher.SideOnly;
  *   meta 6: NS+CROSS     = 四联通十字
  *   meta 7: (保留)
  *
+ * ============ 材质变体 ============
+ * STONE — 石质水渠 (blocks/)
+ * DIRT  — 土质水渠 (blocks_dirt/)
+ * SAND  — 沙质水渠 (blocks_sand/)
+ * 三种变体共享相同的状态机逻辑，仅材质不同。
+ *
  * ============ 状态转换（相对方向, 消除重复代码）============
  * STRAIGHT: LEFT有水渠→T_LEFT, RIGHT有水渠→T_RIGHT
  * T_LEFT:   RIGHT有水渠→upgradeT(检查主干完整性),  LEFT无可见水渠→还原STRAIGHT
@@ -63,6 +69,80 @@ import cpw.mods.fml.relauncher.SideOnly;
  * 参考: data_dump.txt 原版 Canal 模组脚本
  */
 public class BlockCanal extends BlockContainer {
+
+    // ══════════════════════════════════════════════════════
+    //  材质变体枚举
+    // ══════════════════════════════════════════════════════
+
+    public enum Variant {
+        STONE("canal", Material.rock, 1.5f, Block.soundTypeStone, "pickaxe", 0,
+            "",  // 纹理在 blocks/ 根目录
+            "canalSide",
+            "canalTop", "canalTopE", "canalTopC",
+            "canalTopC1", "canalTopC2", "canalTopC3", "canalTopC4",
+            "canalTopWet", "canalTopWetE", "canalTopWetC",
+            "canalTopWetC1", "canalTopWetC2", "canalTopWetC3", "canalTopWetC4",
+            "canalTopClose", "canalTopCloseE"),
+
+        DIRT("canal_dirt", Material.ground, 1.0f, Block.soundTypeGravel, "shovel", 0,
+            "blocks_dirt/",
+            "canal",
+            "canalTop", "canalTopE", "canalTopC",
+            "canalTopC1", "canalTopC2", "canalTopC3", "canalTopC4",
+            "canalwetTop", "canalwetTopE", "canalwetTopC",
+            "canalwetTopC1", "canalwetTopC2", "canalwetTopC3", "canalwetTopC4",
+            "canalTopClose", "canalTopEClose"),
+
+        SAND("canal_sand", Material.sand, 0.8f, Block.soundTypeSand, "shovel", 0,
+            "blocks_sand/",
+            "sandstone_normal",
+            "canaldryTop", "canaldryTopE", "canaldryTopC",
+            "canaldryTopC1", "canaldryTopC2", "canaldryTopC3", "canaldryTopC4",
+            "canalwetTop", "canalwetTopE", "canalwetTopC",
+            "canalwetTopC1", "canalwetTopC2", "canalwetTopC3", "canalwetTopC4",
+            "canaldryTopClose", "canaldryTopEClose");
+
+        /** 注册名 (不含 modid 前缀) */
+        public final String blockName;
+        public final Material material;
+        public final float hardness;
+        public final Block.SoundType sound;
+        public final String harvestTool;
+        public final int harvestLevel;
+
+        // ── 纹理名（不含 modid + 子目录前缀，由 registerBlockIcons 拼接）──
+        public final String texPath;       // 如 "blocks_dirt/" 或 ""
+        public final String sideTex;
+        // 干顶面: NS, EW, CROSS, C1, C2, C3, C4
+        public final String dryNS, dryEW, dryC, dryC1, dryC2, dryC3, dryC4;
+        // 湿顶面: NS, EW, CROSS, C1, C2, C3, C4
+        public final String wetNS, wetEW, wetC, wetC1, wetC2, wetC3, wetC4;
+        // 封闭顶面: NS, EW
+        public final String closedNS, closedEW;
+
+        Variant(String blockName, Material material, float hardness, Block.SoundType sound,
+                String harvestTool, int harvestLevel,
+                String texPath, String sideTex,
+                String dryNS, String dryEW, String dryC,
+                String dryC1, String dryC2, String dryC3, String dryC4,
+                String wetNS, String wetEW, String wetC,
+                String wetC1, String wetC2, String wetC3, String wetC4,
+                String closedNS, String closedEW) {
+            this.blockName = blockName;
+            this.material = material;
+            this.hardness = hardness;
+            this.sound = sound;
+            this.harvestTool = harvestTool;
+            this.harvestLevel = harvestLevel;
+            this.texPath = texPath;
+            this.sideTex = sideTex;
+            this.dryNS = dryNS; this.dryEW = dryEW; this.dryC = dryC;
+            this.dryC1 = dryC1; this.dryC2 = dryC2; this.dryC3 = dryC3; this.dryC4 = dryC4;
+            this.wetNS = wetNS; this.wetEW = wetEW; this.wetC = wetC;
+            this.wetC1 = wetC1; this.wetC2 = wetC2; this.wetC3 = wetC3; this.wetC4 = wetC4;
+            this.closedNS = closedNS; this.closedEW = closedEW;
+        }
+    }
 
     // ─── 旋转常量 ───
     private static final int FACING_NS = 0;
@@ -94,7 +174,16 @@ public class BlockCanal extends BlockContainer {
         ForgeDirection.WEST,  ForgeDirection.EAST
     };
 
-    // ─── 纹理 ───
+    // ══════════════════════════════════════════════════════
+    //  当前变体
+    // ══════════════════════════════════════════════════════
+
+    public final Variant variant;
+
+    // ══════════════════════════════════════════════════════
+    //  纹理
+    // ══════════════════════════════════════════════════════
+
     @SideOnly(Side.CLIENT)
     private IIcon iconSide;
     @SideOnly(Side.CLIENT)
@@ -108,14 +197,19 @@ public class BlockCanal extends BlockContainer {
     @SideOnly(Side.CLIENT)
     private IIcon iconTopClose, iconTopCloseE;
 
-    public BlockCanal() {
-        super(Material.rock);
-        setHardness(1.5f);
+    // ══════════════════════════════════════════════════════
+    //  构造
+    // ══════════════════════════════════════════════════════
+
+    public BlockCanal(Variant variant) {
+        super(variant.material);
+        this.variant = variant;
+        setHardness(variant.hardness);
         setResistance(0.0f);
-        setStepSound(soundTypeStone);
-        setBlockName("canal");
-        setBlockTextureName("canalandwell:canalSide");
-        setHarvestLevel("pickaxe", 0);
+        setStepSound(variant.sound);
+        setBlockName(variant.blockName);
+        setBlockTextureName(CanalAndWell.MODID + ":" + variant.texPath + variant.sideTex);
+        setHarvestLevel(variant.harvestTool, variant.harvestLevel);
         setTickRandomly(true);
     }
 
@@ -322,8 +416,6 @@ public class BlockCanal extends BlockContainer {
      * 若主干仅一端有水渠 → 切换轴向形成新的三联通 T；
      * 若主干两端都有水渠 → 真正的四联通 CROSS；
      * 若主干两端皆空（均无连接）→ 两分支自成直管。
-     * 例如：T_NW (N+S+W) 中 N/S 皆空、W 有 EW 水渠，此时在 E 侧放水渠，
-     * 则唯一实际连接为 E+W → 自动变为 STRAIGHT_EW。
      */
     private static int upgradeT(int facing, World world, int x, int y, int z) {
         if (facing == FACING_EW) {
@@ -508,26 +600,32 @@ public class BlockCanal extends BlockContainer {
     //  纹理注册
     // ══════════════════════════════════════════════════════
 
+    /** 拼接完整图标名: modid:texPath + texName */
+    @SideOnly(Side.CLIENT)
+    private String iconFull(String texName) {
+        return CanalAndWell.MODID + ":" + variant.texPath + texName;
+    }
+
     @Override @SideOnly(Side.CLIENT)
     public void registerBlockIcons(IIconRegister reg) {
-        String m = CanalAndWell.MODID;
-        iconSide   = reg.registerIcon(m + ":canalSide");
-        iconTop    = reg.registerIcon(m + ":canalTop");
-        iconTopE   = reg.registerIcon(m + ":canalTopE");
-        iconTopC   = reg.registerIcon(m + ":canalTopC");
-        iconTopC1  = reg.registerIcon(m + ":canalTopC1");
-        iconTopC2  = reg.registerIcon(m + ":canalTopC2");
-        iconTopC3  = reg.registerIcon(m + ":canalTopC3");
-        iconTopC4  = reg.registerIcon(m + ":canalTopC4");
-        iconWet    = reg.registerIcon(m + ":canalTopWet");
-        iconWetE   = reg.registerIcon(m + ":canalTopWetE");
-        iconWetC   = reg.registerIcon(m + ":canalTopWetC");
-        iconWetC1  = reg.registerIcon(m + ":canalTopWetC1");
-        iconWetC2  = reg.registerIcon(m + ":canalTopWetC2");
-        iconWetC3  = reg.registerIcon(m + ":canalTopWetC3");
-        iconWetC4  = reg.registerIcon(m + ":canalTopWetC4");
-        iconTopClose  = reg.registerIcon(m + ":canalTopClose");
-        iconTopCloseE = reg.registerIcon(m + ":canalTopCloseE");
+        Variant v = variant;
+        iconSide   = reg.registerIcon(iconFull(v.sideTex));
+        iconTop    = reg.registerIcon(iconFull(v.dryNS));
+        iconTopE   = reg.registerIcon(iconFull(v.dryEW));
+        iconTopC   = reg.registerIcon(iconFull(v.dryC));
+        iconTopC1  = reg.registerIcon(iconFull(v.dryC1));
+        iconTopC2  = reg.registerIcon(iconFull(v.dryC2));
+        iconTopC3  = reg.registerIcon(iconFull(v.dryC3));
+        iconTopC4  = reg.registerIcon(iconFull(v.dryC4));
+        iconWet    = reg.registerIcon(iconFull(v.wetNS));
+        iconWetE   = reg.registerIcon(iconFull(v.wetEW));
+        iconWetC   = reg.registerIcon(iconFull(v.wetC));
+        iconWetC1  = reg.registerIcon(iconFull(v.wetC1));
+        iconWetC2  = reg.registerIcon(iconFull(v.wetC2));
+        iconWetC3  = reg.registerIcon(iconFull(v.wetC3));
+        iconWetC4  = reg.registerIcon(iconFull(v.wetC4));
+        iconTopClose  = reg.registerIcon(iconFull(v.closedNS));
+        iconTopCloseE = reg.registerIcon(iconFull(v.closedEW));
     }
 
     // ══════════════════════════════════════════════════════
@@ -592,6 +690,6 @@ public class BlockCanal extends BlockContainer {
 
     @Override
     public boolean isToolEffective(String type, int metadata) {
-        return "pickaxe".equals(type);
+        return variant.harvestTool.equals(type);
     }
 }

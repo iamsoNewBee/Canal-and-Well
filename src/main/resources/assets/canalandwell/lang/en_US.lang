@@ -1,6 +1,8 @@
 # CanalAndWell English Localization
-# Block
-tile.canal.name=Water Canal
+# Blocks
+tile.canal.name=Stone Water Canal
+tile.canal_dirt.name=Dirt Water Canal
+tile.canal_sand.name=Sand Water Canal
 # Creative Tab
 itemGroup.canal=Canal
 # Tooltip / Info

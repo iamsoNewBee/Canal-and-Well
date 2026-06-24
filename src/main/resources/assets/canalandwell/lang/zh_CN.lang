@@ -1,6 +1,8 @@
 # CanalAndWell 中文语言文件
 # 方块
-tile.canal.name=水渠
+tile.canal.name=石质水渠
+tile.canal_dirt.name=土质水渠
+tile.canal_sand.name=沙质水渠
 # 创造标签页
 itemGroup.canal=水渠
 # 提示信息

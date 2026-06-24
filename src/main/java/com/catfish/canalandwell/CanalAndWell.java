@@ -27,8 +27,10 @@ public class CanalAndWell {
     @SidedProxy(clientSide = "com.catfish.canalandwell.ClientProxy", serverSide = "com.catfish.canalandwell.CommonProxy")
     public static CommonProxy proxy;
 
-    // 方块实例
-    public static BlockCanal blockCanal;
+    // 方块实例 —— 三种材质变体
+    public static BlockCanal blockCanal;      // 石质
+    public static BlockCanal blockCanalDirt;  // 土质
+    public static BlockCanal blockCanalSand;  // 沙质
 
     // 创造标签页
     public static CreativeTabs canalTab = new CreativeTabs("canal") {
@@ -42,15 +44,23 @@ public class CanalAndWell {
     public void preInit(FMLPreInitializationEvent event) {
         proxy.preInit(event);
 
-        // 注册水渠方块
-        blockCanal = new BlockCanal();
-        blockCanal.setCreativeTab(canalTab);
-        GameRegistry.registerBlock(blockCanal, "canal");
+        // 注册水渠方块 —— 三种材质变体
+        blockCanal = new BlockCanal(BlockCanal.Variant.STONE);
+        blockCanalDirt = new BlockCanal(BlockCanal.Variant.DIRT);
+        blockCanalSand = new BlockCanal(BlockCanal.Variant.SAND);
 
-        // 注册 TileEntity
+        blockCanal.setCreativeTab(canalTab);
+        blockCanalDirt.setCreativeTab(canalTab);
+        blockCanalSand.setCreativeTab(canalTab);
+
+        GameRegistry.registerBlock(blockCanal, "canal");
+        GameRegistry.registerBlock(blockCanalDirt, "canal_dirt");
+        GameRegistry.registerBlock(blockCanalSand, "canal_sand");
+
+        // 注册 TileEntity（三种变体共用同一个 TE 类）
         GameRegistry.registerTileEntity(TileEntityCanal.class, MODID + ":canal_te");
 
-        LOG.info("CanalAndWell blocks registered.");
+        LOG.info("CanalAndWell blocks registered (stone, dirt, sand).");
     }
 
     @Mod.EventHandler
