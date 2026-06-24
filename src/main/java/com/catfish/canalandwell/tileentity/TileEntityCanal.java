@@ -21,20 +21,20 @@ import com.catfish.canalandwell.Config;
 import com.catfish.canalandwell.block.BlockCanal;
 
 /**
- * 水渠 TileEntity —— 仅存储湿水状态，处理水传播与连锁干燥。
+ * 水渠 TileEntity —— 存储湿润状态，处理水传播与连锁干燥。
  *
- * 连接与形态由 BlockCanal 在渲染时动态计算（参考红石线），
- * TE 不参与连接逻辑，避免状态漂移。
+ * ============ 水流生成 ============
+ * spawnFlowingWater() 仅在当前水渠的连接方向（通过 BlockCanal.getConnectionDirections）
+ * 生成流水，而非盲目四向。STRAIGHT 只灌两端，T 只灌三端，CROSS 灌四端，CLOSED 灌轴端。
+ *
+ * ============ 延迟机制 ============
+ * 湿润传播与连锁干燥均使用定时延迟而非即时递归：
+ * - 变湿后通过 scheduleBlockUpdate 安排邻居在 waterSpreadDelay tick 后检查
+ * - 变干后通过 scheduleBlockUpdate 安排邻居在 chainDryDelay tick 后检查
+ * 每跳延迟由 Config 控制，避免瞬间整条水渠同步闪烁。
  *
  * ============ 客户端同步 ============
- * isWet 状态通过 S35PacketUpdateTileEntity 同步到客户端。
- * setWet(true/false) 时立即发送 packet 到所有追踪此位置的玩家，
- * 确保水渠贴图实时切换。
- *
- * ============ 连锁干燥 ============
- * 当水源被清除或水渠被封闭时，该水渠及其下游渠段应连锁变干。
- * checkShouldDry() 检查是否需要变干并递归通知邻居，通过
- * scheduleBlockUpdate 限流防止栈溢出。
+ * isWet 通过 S35PacketUpdateTileEntity 同步客户端，贴图实时切换。
  */
 public class TileEntityCanal extends TileEntity {
 
@@ -48,10 +48,7 @@ public class TileEntityCanal extends TileEntity {
 
     public boolean isWet() { return isWet; }
 
-    /**
-     * 设置湿润状态并同步到所有客户端。
-     * 服务端调用时立即发送 TE 描述包。
-     */
+    /** 设置湿润状态并同步客户端。 */
     public void setWet(boolean wet) {
         if (this.isWet != wet) {
             this.isWet = wet;
@@ -65,17 +62,16 @@ public class TileEntityCanal extends TileEntity {
         }
     }
 
-    /** 向所有追踪此位置的玩家发送 TE 描述包。 */
     private void sendTileEntityUpdate() {
         if (!(worldObj instanceof WorldServer)) return;
         WorldServer ws = (WorldServer) worldObj;
-        S35PacketUpdateTileEntity packet = new S35PacketUpdateTileEntity(
+        S35PacketUpdateTileEntity pkt = new S35PacketUpdateTileEntity(
                 xCoord, yCoord, zCoord, 0, getUpdateTag());
         double range = 64 * 64;
         for (Object obj : ws.playerEntities) {
             EntityPlayerMP player = (EntityPlayerMP) obj;
             if (player.getDistanceSq(xCoord + 0.5, yCoord + 0.5, zCoord + 0.5) <= range) {
-                player.playerNetServerHandler.sendPacket(packet);
+                player.playerNetServerHandler.sendPacket(pkt);
             }
         }
     }
@@ -87,7 +83,7 @@ public class TileEntityCanal extends TileEntity {
     }
 
     // ══════════════════════════════════════════════════════
-    //  客户端同步 —— Packet
+    //  Packet 同步
     // ══════════════════════════════════════════════════════
 
     @Override
@@ -106,7 +102,7 @@ public class TileEntityCanal extends TileEntity {
     }
 
     // ══════════════════════════════════════════════════════
-    //  每 tick 水源检测 + 传播 + 干燥检查
+    //  每 tick
     // ══════════════════════════════════════════════════════
 
     @Override
@@ -119,23 +115,24 @@ public class TileEntityCanal extends TileEntity {
         Block block = worldObj.getBlock(xCoord, yCoord, zCoord);
         if (!(block instanceof BlockCanal)) return;
 
-        // ── 1. 干燥→湿润：检测到水源 → 变湿 ──
         if (!isWet && detectWaterSource()) {
             setWet(true);
             if (Config.debugLogging) {
                 CanalAndWell.LOG.info("[Canal] Wet at {}, {}, {}", xCoord, yCoord, zCoord);
             }
+            // 延迟通知邻居传播湿润状态
+            scheduleNeighbors(Config.waterSpreadDelay);
         }
 
-        // ── 2. 湿润时：传播 + 生成流水 + 检查是否应干燥 ──
         if (isWet) {
             if (!shouldStayWet()) {
                 setWet(false);
                 if (Config.debugLogging) {
                     CanalAndWell.LOG.info("[Canal] Dry at {}, {}, {} (source lost)", xCoord, yCoord, zCoord);
                 }
-                // 通知邻居也检查是否变干（连锁干燥）
-                notifyNeighborsCheckDry();
+                cleanupFlowingWater();
+                // 延迟通知邻居连锁干燥
+                scheduleNeighbors(Config.chainDryDelay);
             } else {
                 propagateWetness();
                 spawnFlowingWater();
@@ -147,10 +144,6 @@ public class TileEntityCanal extends TileEntity {
     //  水源检测
     // ══════════════════════════════════════════════════════
 
-    /**
-     * 检测相邻是否有水源或已湿润水渠。
-     * 用于干燥→湿润的判断。
-     */
     public boolean detectWaterSource() {
         Block configuredFluid = getFluidBlock();
 
@@ -164,17 +157,9 @@ public class TileEntityCanal extends TileEntity {
             Block neighbor = worldObj.getBlock(nx, ny, nz);
             int neighborMeta = worldObj.getBlockMetadata(nx, ny, nz);
 
-            // 可配置流体方块的水源 (meta=0)
-            if (neighbor == configuredFluid && neighborMeta == 0) {
-                return true;
-            }
+            if (neighbor == configuredFluid && neighborMeta == 0) return true;
+            if (configuredFluid != Blocks.water && neighbor == Blocks.water && neighborMeta == 0) return true;
 
-            // 原版水源方块 (兜底)
-            if (configuredFluid != Blocks.water && neighbor == Blocks.water && neighborMeta == 0) {
-                return true;
-            }
-
-            // 已湿润的相邻水渠
             if (neighbor instanceof BlockCanal) {
                 TileEntity te = worldObj.getTileEntity(nx, ny, nz);
                 if (te instanceof TileEntityCanal && ((TileEntityCanal) te).isWet()) {
@@ -185,10 +170,6 @@ public class TileEntityCanal extends TileEntity {
         return false;
     }
 
-    /**
-     * 仅检查直接的水源方块（不检查湿润水渠邻居）。
-     * 用于湿润→干燥判断的基础条件。
-     */
     private boolean hasDirectWaterSource() {
         Block configuredFluid = getFluidBlock();
 
@@ -208,12 +189,12 @@ public class TileEntityCanal extends TileEntity {
         return false;
     }
 
+    // ══════════════════════════════════════════════════════
+    //  干燥判定（BFS 溯源）
+    // ══════════════════════════════════════════════════════
+
     /**
-     * 湿润水渠是否应该保持湿润。
-     *
      * BFS 沿湿润水渠邻居回溯，在 waterFlowRange 深度内查找直接水源。
-     * 任何湿润水渠必须能通过 ≤ waterFlowRange 跳的湿润路径追溯到水源方块，
-     * 否则水道已断，应变干。
      */
     private boolean shouldStayWet() {
         if (hasDirectWaterSource()) return true;
@@ -241,7 +222,7 @@ public class TileEntityCanal extends TileEntity {
                         TileEntity te = worldObj.getTileEntity(nx, ny, nz);
                         if (te instanceof TileEntityCanal && ((TileEntityCanal) te).isWet()) {
                             if (((TileEntityCanal) te).hasDirectWaterSource()) {
-                                return true; // 找到水源
+                                return true;
                             }
                             visited.add(key);
                             queue.add(new int[]{nx, ny, nz});
@@ -250,10 +231,9 @@ public class TileEntityCanal extends TileEntity {
                 }
             }
         }
-        return false; // 无可达水源 → 应干燥
+        return false;
     }
 
-    /** 将坐标打包为 long 供 visited set 使用 */
     private static long pack(int x, int y, int z) {
         return ((long) x & 0x3FFFFFF) | (((long) y & 0xFF) << 26) | (((long) z & 0x3FFFFFF) << 34);
     }
@@ -262,12 +242,7 @@ public class TileEntityCanal extends TileEntity {
     //  连锁干燥
     // ══════════════════════════════════════════════════════
 
-    /**
-     * 外部调用入口 —— 当相邻方块被清除、水源被移除、或水渠被封闭时，
-     * 由 BlockCanal 调用此方法触发连锁干燥检查。
-     *
-     * 若当前水渠湿润但不应保持湿润 → 变干 → 通知邻居也检查。
-     */
+    /** 外部入口 — 由 BlockCanal 在邻居变化或封闭时调用 */
     public void checkShouldDry() {
         if (!isWet) return;
         if (!shouldStayWet()) {
@@ -275,30 +250,8 @@ public class TileEntityCanal extends TileEntity {
             if (Config.debugLogging) {
                 CanalAndWell.LOG.info("[Canal] Dry at {}, {}, {} (chain)", xCoord, yCoord, zCoord);
             }
-            notifyNeighborsCheckDry();
-        }
-    }
-
-    /**
-     * 通知所有水平相邻水渠也检查是否变干。
-     * 通过设置 tickCounter = 0 并立即调用 checkShouldDry() 实现即时连锁，
-     * 同时依赖 shouldStayWet() 的 2-hop 溯源保证正确终止。
-     */
-    private void notifyNeighborsCheckDry() {
-        for (ForgeDirection dir : new ForgeDirection[] {
-                ForgeDirection.NORTH, ForgeDirection.SOUTH,
-                ForgeDirection.WEST,  ForgeDirection.EAST}) {
-
-            int nx = xCoord + dir.offsetX;
-            int ny = yCoord + dir.offsetY;
-            int nz = zCoord + dir.offsetZ;
-
-            if (worldObj.getBlock(nx, ny, nz) instanceof BlockCanal) {
-                TileEntity te = worldObj.getTileEntity(nx, ny, nz);
-                if (te instanceof TileEntityCanal) {
-                    ((TileEntityCanal) te).checkShouldDry();
-                }
-            }
+            cleanupFlowingWater();
+            scheduleNeighbors(Config.chainDryDelay);
         }
     }
 
@@ -307,7 +260,7 @@ public class TileEntityCanal extends TileEntity {
     // ══════════════════════════════════════════════════════
 
     private void propagateWetness() {
-        for (ForgeDirection dir : new ForgeDirection[] {
+        for (ForgeDirection dir : new ForgeDirection[]{
                 ForgeDirection.NORTH, ForgeDirection.SOUTH,
                 ForgeDirection.WEST,  ForgeDirection.EAST}) {
 
@@ -328,21 +281,29 @@ public class TileEntityCanal extends TileEntity {
         }
     }
 
-    /** 1-hop 实时传播。 */
+    /** 实时 1-hop 传播 + 生成流水（新方块加入已有系统时） */
     public void propagateImmediate() {
         if (!isWet) return;
         propagateWetness();
         spawnFlowingWater();
     }
 
+    // ══════════════════════════════════════════════════════
+    //  流水生成 / 清除
+    // ══════════════════════════════════════════════════════
+
+    /**
+     * 在湿润水渠的**连接方向**空气方块中生成流水。
+     * 仅在水渠朝向有效的方向生成，而非盲目四向。
+     * 生成条件：水平相邻为空气，下方为水渠或流体。
+     */
     private void spawnFlowingWater() {
+        int meta = worldObj.getBlockMetadata(xCoord, yCoord, zCoord);
+        ForgeDirection[] dirs = BlockCanal.getConnectionDirections(meta);
         Block fluidBlock = getFluidBlock();
         int fluidMeta = Config.flowingFluidMeta;
 
-        for (ForgeDirection dir : new ForgeDirection[] {
-                ForgeDirection.NORTH, ForgeDirection.SOUTH,
-                ForgeDirection.WEST,  ForgeDirection.EAST}) {
-
+        for (ForgeDirection dir : dirs) {
             int nx = xCoord + dir.offsetX;
             int ny = yCoord + dir.offsetY;
             int nz = zCoord + dir.offsetZ;
@@ -356,16 +317,68 @@ public class TileEntityCanal extends TileEntity {
         }
     }
 
+    /**
+     * 水渠变干时，清除其连接方向已放置的流水方块。
+     * 仅清除流动态（meta == flowingFluidMeta）流体，保留水源方块。
+     */
+    private void cleanupFlowingWater() {
+        if (!Config.cleanupFlowingWater) return;
+
+        int meta = worldObj.getBlockMetadata(xCoord, yCoord, zCoord);
+        ForgeDirection[] dirs = BlockCanal.getConnectionDirections(meta);
+        Block fluidBlock = getFluidBlock();
+        int fluidMeta = Config.flowingFluidMeta;
+
+        for (ForgeDirection dir : dirs) {
+            int nx = xCoord + dir.offsetX;
+            int ny = yCoord + dir.offsetY;
+            int nz = zCoord + dir.offsetZ;
+
+            Block neighbor = worldObj.getBlock(nx, ny, nz);
+            if ((neighbor == fluidBlock || neighbor == Blocks.water)
+                    && worldObj.getBlockMetadata(nx, ny, nz) == fluidMeta) {
+                // 仅当该水流下方是水渠或流体时清除（确保是水渠产出的流水）
+                Block below = worldObj.getBlock(nx, ny - 1, nz);
+                if (below instanceof BlockCanal || below == fluidBlock || below == Blocks.water) {
+                    worldObj.setBlockToAir(nx, ny, nz);
+                }
+            }
+        }
+    }
+
+    // ══════════════════════════════════════════════════════
+    //  延迟调度
+    // ══════════════════════════════════════════════════════
+
+    /**
+     * 在 delay 刻后调度相邻水渠的 updateTick。
+     * 用于湿润传播和连锁干燥的逐跳延迟。
+     */
+    private void scheduleNeighbors(int delay) {
+        for (ForgeDirection dir : new ForgeDirection[]{
+                ForgeDirection.NORTH, ForgeDirection.SOUTH,
+                ForgeDirection.WEST,  ForgeDirection.EAST}) {
+
+            int nx = xCoord + dir.offsetX;
+            int ny = yCoord + dir.offsetY;
+            int nz = zCoord + dir.offsetZ;
+
+            Block neighbor = worldObj.getBlock(nx, ny, nz);
+            if (neighbor instanceof BlockCanal) {
+                // scheduleBlockUpdate 会使邻居的 updateTick 在 delay 刻后触发
+                worldObj.scheduleBlockUpdate(nx, ny, nz, neighbor, delay);
+            }
+        }
+    }
+
     // ══════════════════════════════════════════════════════
     //  流体方块解析
     // ══════════════════════════════════════════════════════
 
     private static Block getFluidBlock() {
         Block configured = Block.getBlockFromName(Config.flowingFluidBlockName);
-        if (configured != null) {
-            return configured;
-        }
-        CanalAndWell.LOG.warn("[Canal] Unknown fluid block '{}', falling back to minecraft:water",
+        if (configured != null) return configured;
+        CanalAndWell.LOG.warn("[Canal] Unknown fluid '{}', falling back to water",
                 Config.flowingFluidBlockName);
         return Blocks.water;
     }

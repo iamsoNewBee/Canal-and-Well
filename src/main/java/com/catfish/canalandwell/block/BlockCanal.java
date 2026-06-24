@@ -480,6 +480,36 @@ public class BlockCanal extends BlockContainer {
     }
 
     /**
+     * 返回水渠当前形状的连接方向数组。
+     * TileEntityCanal 生成/清除流水时使用此方法来确定哪些方向需要操作。
+     *
+     * STRAIGHT → 主干 2 方向 | T 型 → 主干 + 分支 3 方向
+     * CROSS → 4 方向 | CLOSED → 主干轴向 2 方向
+     */
+    public static ForgeDirection[] getConnectionDirections(int meta) {
+        if (isClosed(meta)) {
+            int facing = getFacing(meta & 7);
+            return AXIS[facing];
+        }
+        int shape = meta & 7;
+        int facing = getFacing(shape);
+        int type = getType(shape);
+
+        switch (type) {
+            case TYPE_STRAIGHT:
+                return AXIS[facing];
+            case TYPE_T_LEFT:
+                return new ForgeDirection[]{AXIS[facing][0], AXIS[facing][1], REL[facing][0]};
+            case TYPE_T_RIGHT:
+                return new ForgeDirection[]{AXIS[facing][0], AXIS[facing][1], REL[facing][1]};
+            case TYPE_CROSS:
+                return HORIZONTALS;
+            default:
+                return AXIS[facing];
+        }
+    }
+
+    /**
      * 检测水源并实时传播。
      * 当新方块加入已有水流的水渠系统时，立即触发湿润传播，
      * 无需等待 updateTick，保证"实时增添"的响应性。
