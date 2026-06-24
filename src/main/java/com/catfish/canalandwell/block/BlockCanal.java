@@ -286,10 +286,11 @@ public class BlockCanal extends BlockContainer {
         if (isFluidLike) {
             checkAndWet(world, x, y, z);
         } else {
-            // 非流体邻居变化（水被清除/替换、或相邻水渠改变）→ 检查是否应连锁变干
+            // 非流体邻居变化 → 通过 scheduleBlockUpdate 异步触发干燥检查，
+            // 避免 markBlockForUpdate → onNeighborBlockChange 同步递归导致 StackOverflow
             TileEntity te = world.getTileEntity(x, y, z);
             if (te instanceof TileEntityCanal && ((TileEntityCanal) te).isWet()) {
-                ((TileEntityCanal) te).checkShouldDry();
+                world.scheduleBlockUpdate(x, y, z, this, 1);
             }
         }
     }
@@ -562,10 +563,10 @@ public class BlockCanal extends BlockContainer {
                 }
                 int newMeta = makeShape(newFacing, TYPE_STRAIGHT, true);
                 world.setBlockMetadataWithNotify(x, y, z, newMeta, 2);
-                // 封闭水渠切断水流 → 自身变干并连锁通知邻居干燥
+                // 封闭水渠切断水流 → 自身变干，通过 scheduleBlockUpdate 触发清理和链式干燥
                 if (canalTe.isWet()) {
                     canalTe.setWet(false);
-                    canalTe.checkShouldDry();
+                    world.scheduleBlockUpdate(x, y, z, this, 1);
                 }
             }
             // 通知邻居重算连接

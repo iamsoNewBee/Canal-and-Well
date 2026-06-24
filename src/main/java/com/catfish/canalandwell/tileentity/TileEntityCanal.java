@@ -109,34 +109,37 @@ public class TileEntityCanal extends TileEntity {
     public void updateEntity() {
         if (worldObj == null || worldObj.isRemote) return;
 
-        if (++tickCounter < Config.tickRate) return;
-        tickCounter = 0;
-
         Block block = worldObj.getBlock(xCoord, yCoord, zCoord);
         if (!(block instanceof BlockCanal)) return;
+
+        // ── 始终运行：干燥检查 + 清理 ──
+        // 由 scheduleBlockUpdate(delay=1) 触发，不受 tickCounter 门控，
+        // 保证链式干燥与水流清除立即响应。
+        if (isWet && !shouldStayWet()) {
+            setWet(false);
+            if (Config.debugLogging) {
+                CanalAndWell.LOG.info("[Canal] Dry at {}, {}, {} (source lost)", xCoord, yCoord, zCoord);
+            }
+            cleanupFlowingWater();
+            scheduleNeighbors(Config.chainDryDelay);
+            return; // 变干后跳过传播
+        }
+
+        // ── 定时运行：水源检测 + 传播 + 生成流水 ──
+        if (++tickCounter < Config.tickRate) return;
+        tickCounter = 0;
 
         if (!isWet && detectWaterSource()) {
             setWet(true);
             if (Config.debugLogging) {
                 CanalAndWell.LOG.info("[Canal] Wet at {}, {}, {}", xCoord, yCoord, zCoord);
             }
-            // 延迟通知邻居传播湿润状态
             scheduleNeighbors(Config.waterSpreadDelay);
         }
 
         if (isWet) {
-            if (!shouldStayWet()) {
-                setWet(false);
-                if (Config.debugLogging) {
-                    CanalAndWell.LOG.info("[Canal] Dry at {}, {}, {} (source lost)", xCoord, yCoord, zCoord);
-                }
-                cleanupFlowingWater();
-                // 延迟通知邻居连锁干燥
-                scheduleNeighbors(Config.chainDryDelay);
-            } else {
-                propagateWetness();
-                spawnFlowingWater();
-            }
+            propagateWetness();
+            spawnFlowingWater();
         }
     }
 
