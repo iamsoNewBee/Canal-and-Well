@@ -19,10 +19,10 @@ public class Config {
     public static boolean cleanupFlowingWater = true;
     /** 是否允许玻璃瓶取水，默认 true */
     public static boolean enableBottleFill = true;
-    /** 连锁干燥每跳延迟 (tick)，默认 2（每跳 0.1 秒） */
-    public static int chainDryDelay = 2;
-    /** 湿润传播每跳延迟 (tick)，默认 5（每跳 0.25 秒） */
-    public static int waterSpreadDelay = 5;
+    /** 连锁干燥每跳延迟 (tick)，默认 5（每跳 0.25 秒） */
+    public static int chainDryDelay = 5;
+    /** 湿润传播每跳延迟 (tick)，默认 10（每跳 0.5 秒） */
+    public static int waterSpreadDelay = 10;
 
     // ───────────────── 流水方块设置 ─────────────────
     /** 水渠湿润时产出的流体方块名称，默认 minecraft:water */
@@ -60,10 +60,10 @@ public class Config {
                 "Metadata for the spawned fluid block. 0 = source, 1 = flowing. (default: 1)");
 
             // ── 延迟设置 ──
-            chainDryDelay = cfg.getInt("chainDryDelay", catWater, chainDryDelay, 0, 100,
-                "Delay in ticks between each hop of chain drying when water source is lost. 0 = instant. (default: 2)");
-            waterSpreadDelay = cfg.getInt("waterSpreadDelay", catWater, waterSpreadDelay, 1, 100,
-                "Delay in ticks between each hop of water spread through dry canals. (default: 5)");
+            chainDryDelay = cfg.getInt("chainDryDelay", catWater, chainDryDelay, 0, 200,
+                "Delay in ticks between each hop of chain drying when water source is lost. 0 = instant. (default: 5, ~0.25s)");
+            waterSpreadDelay = cfg.getInt("waterSpreadDelay", catWater, waterSpreadDelay, 1, 200,
+                "Delay in ticks between each hop of water spread through dry canals. (default: 10, ~0.5s)");
 
             // ── 交互类别 ──
             String catInteract = "interaction";

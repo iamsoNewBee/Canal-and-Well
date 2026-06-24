@@ -295,7 +295,10 @@ public class TileEntityCanal extends TileEntity {
     /**
      * 在湿润水渠的**连接方向**空气方块中生成流水。
      * 仅在水渠朝向有效的方向生成，而非盲目四向。
-     * 生成条件：水平相邻为空气，下方为水渠或流体。
+     *
+     * 端口输出：连接方向上的空气方块直接放置流态水，下方不必是水渠。
+     * 这样水渠的开放端口（无相邻水渠的连通方向）能正常输出水流，
+     * 水流自然下落，不需要下方有特殊支撑。
      */
     private void spawnFlowingWater() {
         int meta = worldObj.getBlockMetadata(xCoord, yCoord, zCoord);
@@ -310,8 +313,9 @@ public class TileEntityCanal extends TileEntity {
 
             if (!worldObj.isAirBlock(nx, ny, nz)) continue;
 
+            // 仅当空气下方有任意支撑方块时才放置水（避免水悬空掉落导致意外泛滥）
             Block below = worldObj.getBlock(nx, ny - 1, nz);
-            if (below instanceof BlockCanal || below == fluidBlock || below == Blocks.water) {
+            if (!worldObj.isAirBlock(nx, ny - 1, nz)) {
                 worldObj.setBlock(nx, ny, nz, fluidBlock, fluidMeta, 3);
             }
         }
