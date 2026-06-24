@@ -278,12 +278,19 @@ public class BlockCanal extends BlockContainer {
     public void onNeighborBlockChange(World world, int x, int y, int z, Block neighborBlock) {
         if (world.isRemote) return;
         Block fluid = getFluidBlock();
-        if (neighborBlock instanceof BlockCanal || neighborBlock == Blocks.water
-                || neighborBlock == fluid || neighborBlock == Blocks.air) {
+        boolean isFluidLike = (neighborBlock == Blocks.water || neighborBlock == fluid);
+
+        if (neighborBlock instanceof BlockCanal || isFluidLike || neighborBlock == Blocks.air) {
             notifyAndUpdate(world, x, y, z);
         }
-        if (neighborBlock == Blocks.water || neighborBlock == fluid) {
+        if (isFluidLike) {
             checkAndWet(world, x, y, z);
+        } else {
+            // 非流体邻居变化（水被清除/替换、或相邻水渠改变）→ 检查是否应连锁变干
+            TileEntity te = world.getTileEntity(x, y, z);
+            if (te instanceof TileEntityCanal && ((TileEntityCanal) te).isWet()) {
+                ((TileEntityCanal) te).checkShouldDry();
+            }
         }
     }
 
@@ -525,6 +532,11 @@ public class BlockCanal extends BlockContainer {
                 }
                 int newMeta = makeShape(newFacing, TYPE_STRAIGHT, true);
                 world.setBlockMetadataWithNotify(x, y, z, newMeta, 2);
+                // 封闭水渠切断水流 → 自身变干并连锁通知邻居干燥
+                if (canalTe.isWet()) {
+                    canalTe.setWet(false);
+                    canalTe.checkShouldDry();
+                }
             }
             // 通知邻居重算连接
             for (ForgeDirection dir : HORIZONTALS) {
