@@ -1,0 +1,16 @@
+# CanalAndWell 中文语言文件
+# 方块
+tile.canal.name=水渠
+# 创造标签页
+itemGroup.canal=水渠
+# 提示信息
+canalandwell.tooltip.closed=已封闭（潜行+右键切换）
+canalandwell.tooltip.open=已开启
+canalandwell.tooltip.wet=水流通过中
+canalandwell.tooltip.dry=干燥
+# 配置
+canalandwell.config.title=水渠与水井 配置
+canalandwell.config.tickRate=水流更新间隔
+canalandwell.config.tickRate.tooltip=每次水流传播检查的间隔 tick 数（默认：10）
+canalandwell.config.waterFlowRange=水流传播范围
+canalandwell.config.waterFlowRange.tooltip=水流从水源开始的最大传播距离（默认：64）

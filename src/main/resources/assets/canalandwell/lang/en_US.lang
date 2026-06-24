@@ -1,0 +1,16 @@
+# CanalAndWell English Localization
+# Block
+tile.canal.name=Water Canal
+# Creative Tab
+itemGroup.canal=Canal
+# Tooltip / Info
+canalandwell.tooltip.closed=Closed (Sneak+RightClick to toggle)
+canalandwell.tooltip.open=Open
+canalandwell.tooltip.wet=Water flowing
+canalandwell.tooltip.dry=Dry
+# Config
+canalandwell.config.title=CanalAndWell Configuration
+canalandwell.config.tickRate=Water update tick rate
+canalandwell.config.tickRate.tooltip=Number of ticks between water propagation checks (default: 10)
+canalandwell.config.waterFlowRange=Water flow range
+canalandwell.config.waterFlowRange.tooltip=Max distance water can flow from source (default: 64)
