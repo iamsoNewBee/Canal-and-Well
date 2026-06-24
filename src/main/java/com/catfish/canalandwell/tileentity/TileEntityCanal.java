@@ -1,9 +1,16 @@
 package com.catfish.canalandwell.tileentity;
 
+import java.util.List;
+
 import net.minecraft.block.Block;
+import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.init.Blocks;
 import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.network.NetworkManager;
+import net.minecraft.network.Packet;
+import net.minecraft.network.play.server.S35PacketUpdateTileEntity;
 import net.minecraft.tileentity.TileEntity;
+import net.minecraft.world.WorldServer;
 import net.minecraftforge.common.util.ForgeDirection;
 
 import com.catfish.canalandwell.CanalAndWell;
@@ -18,6 +25,11 @@ import com.catfish.canalandwell.block.BlockCanal;
  *
  * 注意：1.7.10 中 TileEntity.canUpdate() 默认 false，
  * 必须重写为 true 才能使 updateEntity() 被调用。
+ *
+ * ============ 客户端同步 ============
+ * isWet 状态通过 S35PacketUpdateTileEntity 同步到客户端。
+ * setWet(true/false) 时立即发送 packet 到所有追踪此位置的玩家，
+ * 确保水渠贴图实时切换。
  */
 public class TileEntityCanal extends TileEntity {
 
@@ -32,13 +44,65 @@ public class TileEntityCanal extends TileEntity {
 
     public boolean isWet() { return isWet; }
 
+    /**
+     * 设置湿润状态并同步到所有客户端。
+     * 服务端调用时立即发送 TE 描述包，客户端收到后更新本地 isWet 并触发重绘。
+     */
     public void setWet(boolean wet) {
         if (this.isWet != wet) {
             this.isWet = wet;
             markDirty();
             if (worldObj != null) {
+                // 标记方块需要重绘（更新方块 ID + meta）
                 worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
+                // 同步 TE 数据到所有客户端
+                if (!worldObj.isRemote) {
+                    sendTileEntityUpdate();
+                }
             }
+        }
+    }
+
+    /**
+     * 向所有追踪此位置的玩家发送 TE 描述包。
+     */
+    private void sendTileEntityUpdate() {
+        if (!(worldObj instanceof WorldServer)) return;
+        WorldServer ws = (WorldServer) worldObj;
+        S35PacketUpdateTileEntity packet = new S35PacketUpdateTileEntity(
+                xCoord, yCoord, zCoord, 0, getUpdateTag());
+        double range = 64 * 64;
+        for (EntityPlayerMP player : (List<EntityPlayerMP>) ws.playerEntities) {
+            if (player.getDistanceSq(xCoord + 0.5, yCoord + 0.5, zCoord + 0.5) <= range) {
+                player.playerNetServerHandler.sendPacket(packet);
+            }
+        }
+    }
+
+    /** 供 sendTileEntityUpdate 使用的 NBT（仅包含需同步的字段） */
+    private NBTTagCompound getUpdateTag() {
+        NBTTagCompound tag = new NBTTagCompound();
+        tag.setBoolean("isWet", isWet);
+        return tag;
+    }
+
+    // ══════════════════════════════════════════════════════
+    //  客户端同步 —— Packet 处理
+    // ══════════════════════════════════════════════════════
+
+    @Override
+    public Packet getDescriptionPacket() {
+        NBTTagCompound tag = new NBTTagCompound();
+        writeToNBT(tag);
+        return new S35PacketUpdateTileEntity(xCoord, yCoord, zCoord, 0, tag);
+    }
+
+    @Override
+    public void onDataPacket(NetworkManager net, S35PacketUpdateTileEntity pkt) {
+        readFromNBT(pkt.func_148857_g());
+        // 触发客户端重绘
+        if (worldObj != null) {
+            worldObj.markBlockForUpdate(xCoord, yCoord, zCoord);
         }
     }
 
@@ -79,8 +143,8 @@ public class TileEntityCanal extends TileEntity {
      * 检测相邻是否有水源或已湿润水渠。
      * 检测目标：
      *   1. 可配置流体方块 (meta=0, 水源)
-     *   2. 已湿润的相邻水渠
-     *   3. 原版水源方块 (minecraft:water meta=0)，作为兜底
+     *   2. 原版水源方块 (minecraft:water meta=0)，作为兜底
+     *   3. 已湿润的相邻水渠
      */
     public boolean detectWaterSource() {
         Block configuredFluid = getFluidBlock();
