@@ -48,10 +48,10 @@ import cpw.mods.fml.relauncher.SideOnly;
  *   meta 7: (保留)
  *
  * ============ 材质变体 ============
- * STONE — 石质水渠 (blocks/)
- * DIRT  — 土质水渠 (blocks_dirt/)
- * SAND  — 沙质水渠 (blocks_sand/)
- * 三种变体共享相同的状态机逻辑，仅材质不同。
+ * STONE — 石质水渠 (canal* 纹理)
+ * DIRT  — 土质水渠 (dirt* 纹理)
+ * SAND  — 沙质水渠 (sand* 纹理)
+ * 三种变体纹理统一放在 blocks/ 下，共享相同的状态机逻辑，仅材质不同。
  *
  * ============ 状态转换（相对方向, 消除重复代码）============
  * STRAIGHT: LEFT有水渠→T_LEFT, RIGHT有水渠→T_RIGHT
@@ -75,8 +75,9 @@ public class BlockCanal extends BlockContainer {
     // ══════════════════════════════════════════════════════
 
     public enum Variant {
+        // 所有纹理统一放在 assets/canalandwell/textures/blocks/ 下，
+        // 石质无前缀，土质 dirt 前缀，沙质 sand 前缀。
         STONE("canal", Material.rock, 1.5f, Block.soundTypeStone, "pickaxe", 0,
-            "",  // 纹理在 blocks/ 根目录
             "canalSide",
             "canalTop", "canalTopE", "canalTopC",
             "canalTopC1", "canalTopC2", "canalTopC3", "canalTopC4",
@@ -85,22 +86,20 @@ public class BlockCanal extends BlockContainer {
             "canalTopClose", "canalTopCloseE"),
 
         DIRT("canal_dirt", Material.ground, 1.0f, Block.soundTypeGravel, "shovel", 0,
-            "blocks_dirt/",
-            "canal",
-            "canalTop", "canalTopE", "canalTopC",
-            "canalTopC1", "canalTopC2", "canalTopC3", "canalTopC4",
-            "canalwetTop", "canalwetTopE", "canalwetTopC",
-            "canalwetTopC1", "canalwetTopC2", "canalwetTopC3", "canalwetTopC4",
-            "canalTopClose", "canalTopEClose"),
+            "dirtSide",
+            "dirtTop", "dirtTopE", "dirtTopC",
+            "dirtTopC1", "dirtTopC2", "dirtTopC3", "dirtTopC4",
+            "dirtTopWet", "dirtTopWetE", "dirtTopWetC",
+            "dirtTopWetC1", "dirtTopWetC2", "dirtTopWetC3", "dirtTopWetC4",
+            "dirtTopClose", "dirtTopCloseE"),
 
         SAND("canal_sand", Material.sand, 0.8f, Block.soundTypeSand, "shovel", 0,
-            "blocks_sand/",
-            "sandstone_normal",
-            "canaldryTop", "canaldryTopE", "canaldryTopC",
-            "canaldryTopC1", "canaldryTopC2", "canaldryTopC3", "canaldryTopC4",
-            "canalwetTop", "canalwetTopE", "canalwetTopC",
-            "canalwetTopC1", "canalwetTopC2", "canalwetTopC3", "canalwetTopC4",
-            "canaldryTopClose", "canaldryTopEClose");
+            "sandSide",
+            "sandTop", "sandTopE", "sandTopC",
+            "sandTopC1", "sandTopC2", "sandTopC3", "sandTopC4",
+            "sandTopWet", "sandTopWetE", "sandTopWetC",
+            "sandTopWetC1", "sandTopWetC2", "sandTopWetC3", "sandTopWetC4",
+            "sandTopClose", "sandTopCloseE");
 
         /** 注册名 (不含 modid 前缀) */
         public final String blockName;
@@ -110,8 +109,7 @@ public class BlockCanal extends BlockContainer {
         public final String harvestTool;
         public final int harvestLevel;
 
-        // ── 纹理名（不含 modid + 子目录前缀，由 registerBlockIcons 拼接）──
-        public final String texPath;       // 如 "blocks_dirt/" 或 ""
+        // ── 纹理名（统一在 blocks/ 下，不含 modid 前缀）──
         public final String sideTex;
         // 干顶面: NS, EW, CROSS, C1, C2, C3, C4
         public final String dryNS, dryEW, dryC, dryC1, dryC2, dryC3, dryC4;
@@ -122,7 +120,7 @@ public class BlockCanal extends BlockContainer {
 
         Variant(String blockName, Material material, float hardness, Block.SoundType sound,
                 String harvestTool, int harvestLevel,
-                String texPath, String sideTex,
+                String sideTex,
                 String dryNS, String dryEW, String dryC,
                 String dryC1, String dryC2, String dryC3, String dryC4,
                 String wetNS, String wetEW, String wetC,
@@ -134,7 +132,6 @@ public class BlockCanal extends BlockContainer {
             this.sound = sound;
             this.harvestTool = harvestTool;
             this.harvestLevel = harvestLevel;
-            this.texPath = texPath;
             this.sideTex = sideTex;
             this.dryNS = dryNS; this.dryEW = dryEW; this.dryC = dryC;
             this.dryC1 = dryC1; this.dryC2 = dryC2; this.dryC3 = dryC3; this.dryC4 = dryC4;
@@ -208,7 +205,7 @@ public class BlockCanal extends BlockContainer {
         setResistance(0.0f);
         setStepSound(variant.sound);
         setBlockName(variant.blockName);
-        setBlockTextureName(CanalAndWell.MODID + ":" + variant.texPath + variant.sideTex);
+        setBlockTextureName(CanalAndWell.MODID + ":" + variant.sideTex);
         setHarvestLevel(variant.harvestTool, variant.harvestLevel);
         setTickRandomly(true);
     }
@@ -600,10 +597,10 @@ public class BlockCanal extends BlockContainer {
     //  纹理注册
     // ══════════════════════════════════════════════════════
 
-    /** 拼接完整图标名: modid:texPath + texName */
+    /** 拼接完整图标名: modid:texName */
     @SideOnly(Side.CLIENT)
     private String iconFull(String texName) {
-        return CanalAndWell.MODID + ":" + variant.texPath + texName;
+        return CanalAndWell.MODID + ":" + texName;
     }
 
     @Override @SideOnly(Side.CLIENT)

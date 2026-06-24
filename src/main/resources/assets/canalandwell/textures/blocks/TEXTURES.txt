@@ -1,15 +1,41 @@
 # CanalAndWell 纹理清单
 
-需要的纹理文件（放置于 `assets/canalandwell/textures/blocks/`）：
+所有纹理统一放在 `assets/canalandwell/textures/blocks/` 下，按前缀区分变体：
 
-| 文件名 | 说明 | 建议尺寸 |
-|--------|------|----------|
-| `canalSide.png` | 水渠侧面与底面纹理（石砖风格） | 16×16 |
-| `canalTop.png` | 水渠干燥顶面纹理 | 16×16 |
-| `canalTopWet.png` | 水渠湿润顶面纹理（带水纹） | 16×16 |
-| `canalInside.png` | 水渠内壁纹理（可选，当前侧面复用） | 16×16 |
+| 前缀 | 变体 | 数量 |
+|------|------|------|
+| `canal*` (无前缀) | 石质水渠 | 17 |
+| `dirt*` | 土质水渠 | 17 |
+| `sand*` | 沙质水渠 | 17 |
 
-纹理设计参考：
-- 侧面：类似石砖/石板风格
-- 顶面干燥：槽状纹理，中间略低
-- 顶面湿润：在干燥顶面基础上叠加蓝色水纹
+## 纹理命名规则 (每变体 17 张)
+
+| 用途 | 石质 | 土质 | 沙质 |
+|------|------|------|------|
+| 侧面 | `canalSide.png` | `dirtSide.png` | `sandSide.png` |
+| 干顶 NS | `canalTop.png` | `dirtTop.png` | `sandTop.png` |
+| 干顶 EW | `canalTopE.png` | `dirtTopE.png` | `sandTopE.png` |
+| 干顶 CROSS | `canalTopC.png` | `dirtTopC.png` | `sandTopC.png` |
+| 干顶 C1 | `canalTopC1.png` | `dirtTopC1.png` | `sandTopC1.png` |
+| 干顶 C2 | `canalTopC2.png` | `dirtTopC2.png` | `sandTopC2.png` |
+| 干顶 C3 | `canalTopC3.png` | `dirtTopC3.png` | `sandTopC3.png` |
+| 干顶 C4 | `canalTopC4.png` | `dirtTopC4.png` | `sandTopC4.png` |
+| 湿顶 NS | `canalTopWet.png` | `dirtTopWet.png` | `sandTopWet.png` |
+| 湿顶 EW | `canalTopWetE.png` | `dirtTopWetE.png` | `sandTopWetE.png` |
+| 湿顶 CROSS | `canalTopWetC.png` | `dirtTopWetC.png` | `sandTopWetC.png` |
+| 湿顶 C1 | `canalTopWetC1.png` | `dirtTopWetC1.png` | `sandTopWetC1.png` |
+| 湿顶 C2 | `canalTopWetC2.png` | `dirtTopWetC2.png` | `sandTopWetC2.png` |
+| 湿顶 C3 | `canalTopWetC3.png` | `dirtTopWetC3.png` | `sandTopWetC3.png` |
+| 湿顶 C4 | `canalTopWetC4.png` | `dirtTopWetC4.png` | `sandTopWetC4.png` |
+| 封闭 NS | `canalTopClose.png` | `dirtTopClose.png` | `sandTopClose.png` |
+| 封闭 EW | `canalTopCloseE.png` | `dirtTopCloseE.png` | `sandTopCloseE.png` |
+
+## 动画控制 (.mcmeta)
+
+湿顶面纹理附带动画控制文件 (`.png.mcmeta`)，用于水面流动效果。
+
+## 辅助纹理
+
+| 文件 | 说明 |
+|------|------|
+| `water_still.png` + `.mcmeta` | 静态水面纹理（动画） |
